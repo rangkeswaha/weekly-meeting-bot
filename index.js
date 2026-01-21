@@ -123,6 +123,31 @@ client.on(Events.MessageCreate, async message => {
 });
 
 
+/* Delete Subscribers list */
+client.on(Events.MessageCreate, async message => {
+  if (message.author.bot) return;
+  if (message.content !== "!clear-subscribers") return;
+
+  // 🔐 OWNER ONLY
+  if (message.author.id !== "340464341193326593") {
+    return;
+  }
+
+  try {
+    saveSubscribers([]); // clear the list
+
+    await message.author.send(
+      "🧹 **All subscribers have been cleared successfully.**\n\nThe weekly meeting list is now empty."
+    );
+
+    console.log("🧹 Subscribers list cleared by owner");
+  } catch (err) {
+    console.error("❌ Failed to clear subscribers", err);
+  }
+});
+
+
+
 /* ===== CRON JOB ===== */
 /*
   Friday 9 PM GMT+8
