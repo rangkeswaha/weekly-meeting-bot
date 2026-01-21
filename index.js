@@ -8,7 +8,7 @@ const {
 } = require("discord.js");
 
 /* ========= CONFIG ========= */
-const TOKEN = process.env.DISCORD_TOKEN; // set this in Railway / hosting
+const TOKEN = process.env.DISCORD_TOKEN;
 const GUILD_ID = "1354518292009717841";
 const TEXT_CHANNEL_ID = "1462735108598399103";
 const VOICE_CHANNEL_ID = "1462727284187201680";
@@ -30,24 +30,39 @@ const client = new Client({
   ]
 });
 
-/* ====== HELPERS ====== */
+/* ===== SAFE FILE HANDLING ===== */
 function loadSubscribers() {
-  if (!fs.existsSync(SUBSCRIBERS_FILE)) {
-    fs.writeFileSync(SUBSCRIBERS_FILE, JSON.stringify([]));
+  try {
+    if (!fs.existsSync(SUBSCRIBERS_FILE)) {
+      fs.writeFileSync(SUBSCRIBERS_FILE, "[]");
+      return [];
+    }
+
+    const data = fs.readFileSync(SUBSCRIBERS_FILE, "utf8").trim();
+
+    if (!data) {
+      fs.writeFileSync(SUBSCRIBERS_FILE, "[]");
+      return [];
+    }
+
+    return JSON.parse(data);
+  } catch (err) {
+    console.error("⚠️ subscribers.json corrupted — resetting");
+    fs.writeFileSync(SUBSCRIBERS_FILE, "[]");
+    return [];
   }
-  return JSON.parse(fs.readFileSync(SUBSCRIBERS_FILE));
 }
 
 function saveSubscribers(list) {
   fs.writeFileSync(SUBSCRIBERS_FILE, JSON.stringify(list, null, 2));
 }
-/* ===================== */
+/* =============================== */
 
 client.once(Events.ClientReady, () => {
   console.log(`🤖 Logged in as ${client.user.tag}`);
 });
 
-/* ====== REACTION HANDLER ====== */
+/* ===== REACTION HANDLER ===== */
 client.on(Events.MessageReactionAdd, async (reaction, user) => {
   if (user.bot) return;
 
@@ -62,6 +77,8 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
   if (reaction.message.channel.id !== TEXT_CHANNEL_ID) return;
   if (reaction.emoji.name !== EMOJI) return;
 
+  console.log(`🔔 Reaction accepted from ${user.tag}`);
+
   const subscribers = loadSubscribers();
 
   if (subscribers.includes(user.id)) {
@@ -72,29 +89,29 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
   subscribers.push(user.id);
   saveSubscribers(subscribers);
 
-  console.log(`✅ ${user.tag} subscribed`);
-
   try {
     await user.send(
-      "✅ You’re subscribed!\n\nYou’ll receive a **DM every Friday at 9 PM (GMT+8)** with the voice chat link."
+      "✅ You’re subscribed!\n\nYou’ll receive a DM every **Friday at 9 PM (GMT+8)** with the voice chat link."
     );
+    console.log(`📩 Confirmation DM sent to ${user.tag}`);
   } catch {
     console.log(`❌ Cannot DM ${user.tag}`);
   }
 });
 /* ============================ */
 
-/* ====== CRON JOB ====== */
+/* ===== CRON JOB ===== */
 /*
-  Friday 9:00 PM GMT+8
+  Friday 9 PM GMT+8
   = Friday 13:00 UTC
 */
+// cron.schedule("0 13 * * 5", async () => {
 cron.schedule("* * * * *", async () => {
   console.log("⏰ Weekly Meeting Reminder Triggered");
 
   const subscribers = loadSubscribers();
   if (subscribers.length === 0) {
-    console.log("ℹ️ No subscribers");
+    console.log("ℹ️ No subscribers to notify");
     return;
   }
 
@@ -108,10 +125,15 @@ cron.schedule("* * * * *", async () => {
       );
       console.log(`📩 DM sent to ${user.tag}`);
     } catch {
-      console.log(`❌ Failed to DM user ${userId}`);
+      console.log(`❌ Failed to DM ${userId}`);
     }
   }
 });
 /* ===================== */
+
+process.on("SIGTERM", () => {
+  console.log("⚠️ Process terminated (SIGTERM)");
+  process.exit(0);
+});
 
 client.login(TOKEN);
