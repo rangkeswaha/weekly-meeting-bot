@@ -14,6 +14,7 @@ const TEXT_CHANNEL_ID = "1462735108598399103";
 const VOICE_CHANNEL_ID = "1462727284187201680";
 const EMOJI = "🔔";
 const SUBSCRIBERS_FILE = "./subscribers.json";
+const ROLE_ID = "1463660395674992705"; // Weekly Meeting role
 /* ========================== */
 
 const client = new Client({
@@ -97,6 +98,18 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
   } catch {
     console.log(`❌ Cannot DM ${user.tag}`);
   }
+
+  /* Add Weekly Meeting Role */
+  try {
+    const guild = await client.guilds.fetch(GUILD_ID);
+    const member = await guild.members.fetch(user.id);
+  
+    await member.roles.add(ROLE_ID);
+    console.log(`🏷️ Weekly Meeting role added to ${user.tag}`);
+  } catch (err) {
+    console.log(`❌ Failed to add role to ${user.tag}`);
+  }
+
 });
 
 /* Delete subscriber from the list when remove reaction */
@@ -133,6 +146,18 @@ client.on(Events.MessageReactionRemove, async (reaction, user) => {
   } catch {
     console.log(`❌ Cannot DM ${user.tag}`);
   }
+
+  /* Remove Weekly Meeting Role */
+  try {
+    const guild = await client.guilds.fetch(GUILD_ID);
+    const member = await guild.members.fetch(user.id);
+  
+    await member.roles.remove(ROLE_ID);
+    console.log(`🏷️ Weekly Meeting role removed from ${user.tag}`);
+  } catch (err) {
+    console.log(`❌ Failed to remove role from ${user.tag}`);
+  }
+
 });
 
 /* ============================ */
