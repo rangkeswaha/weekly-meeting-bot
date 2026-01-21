@@ -105,8 +105,8 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
   Friday 9 PM GMT+8
   = Friday 13:00 UTC
 */
-// cron.schedule("0 13 * * 5", async () => {
-cron.schedule("* * * * *", async () => {
+cron.schedule("0 13 * * 5", async () => {
+// cron.schedule("* * * * *", async () => {
   console.log("⏰ Weekly Meeting Reminder Triggered");
 
   const subscribers = loadSubscribers();
