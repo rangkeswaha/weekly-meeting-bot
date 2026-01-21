@@ -100,6 +100,29 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
 });
 /* ============================ */
 
+/* Check Subscribers list */
+client.on(Events.MessageCreate, async message => {
+  if (message.author.bot) return;
+  if (message.content !== "!subscribers") return;
+
+  // 🔐 ADMIN ONLY
+  if (message.author.id !== "340464341193326593") {
+    return;
+  }
+
+  const list = loadSubscribers();
+
+  try {
+    await message.author.send(
+      `📄 **Subscribers (${list.length})**\n\n` +
+      (list.length ? list.join("\n") : "No subscribers yet.")
+    );
+  } catch {
+    console.log("❌ Failed to DM admin");
+  }
+});
+
+
 /* ===== CRON JOB ===== */
 /*
   Friday 9 PM GMT+8
