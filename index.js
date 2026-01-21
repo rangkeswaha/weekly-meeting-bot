@@ -98,6 +98,43 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
     console.log(`❌ Cannot DM ${user.tag}`);
   }
 });
+
+/* Delete subscriber from the list when remove reaction */
+client.on(Events.MessageReactionRemove, async (reaction, user) => {
+  if (user.bot) return;
+
+  if (reaction.partial) {
+    try {
+      await reaction.fetch();
+    } catch {
+      return;
+    }
+  }
+
+  if (reaction.message.channel.id !== TEXT_CHANNEL_ID) return;
+  if (reaction.emoji.name !== EMOJI) return;
+
+  const subscribers = loadSubscribers();
+  const index = subscribers.indexOf(user.id);
+
+  if (index === -1) {
+    return; // user was not subscribed
+  }
+
+  subscribers.splice(index, 1);
+  saveSubscribers(subscribers);
+
+  console.log(`❌ ${user.tag} unsubscribed`);
+
+  try {
+    await user.send(
+      "❌ You have been **unsubscribed** from the weekly meeting reminders.\n\nReact with 🔔 again anytime to rejoin."
+    );
+  } catch {
+    console.log(`❌ Cannot DM ${user.tag}`);
+  }
+});
+
 /* ============================ */
 
 /* Check Subscribers list */
