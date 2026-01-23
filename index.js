@@ -210,6 +210,23 @@ client.on(Events.MessageCreate, async message => {
 
 
 
+Events.GuildMemberRemove
+/* ===== CLEANUP WHEN MEMBER LEAVES / KICKED ===== */
+client.on(Events.GuildMemberRemove, member => {
+  const subscribers = loadSubscribers();
+  const index = subscribers.indexOf(member.id);
+
+  if (index === -1) return; // not subscribed, nothing to clean
+
+  subscribers.splice(index, 1);
+  saveSubscribers(subscribers);
+
+  console.log(`🧹 Removed ${member.user.tag} from subscribers (left/kicked)`);
+});
+/* ============================================= */
+
+
+
 /* ===== CRON JOB ===== */
 /*
   Friday 9 PM GMT+8
