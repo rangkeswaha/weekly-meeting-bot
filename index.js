@@ -20,8 +20,9 @@ const ROLE_ID = "1463660395674992705"; // Weekly Meeting role
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessageReactions,
-    GatewayIntentBits.DirectMessages
+    GatewayIntentBits.DirectMessages,
   ],
   partials: [
     Partials.Message,
@@ -210,7 +211,6 @@ client.on(Events.MessageCreate, async message => {
 
 
 
-Events.GuildMemberRemove
 /* ===== CLEANUP WHEN MEMBER LEAVES / KICKED ===== */
 client.on(Events.GuildMemberRemove, member => {
   const subscribers = loadSubscribers();
