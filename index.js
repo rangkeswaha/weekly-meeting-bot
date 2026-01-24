@@ -13,8 +13,9 @@ const GUILD_ID = "1354518292009717841";
 const TEXT_CHANNEL_ID = "1462735108598399103";
 const VOICE_CHANNEL_ID = "1462727284187201680";
 const EMOJI = "🔔";
-const SUBSCRIBERS_FILE = "./subscribers.json";
-const ROLE_ID = "1463660395674992705"; // Weekly Meeting role
+const DATA_FILE = "./subscribers.json";
+const ROLE_ID = "1463660395674992705";
+const OWNER_ID = "340464341193326593";
 /* ========================== */
 
 const client = new Client({
@@ -32,235 +33,154 @@ const client = new Client({
   ]
 });
 
-/* ===== SAFE FILE HANDLING ===== */
-function loadSubscribers() {
+/* ===== DATA HANDLING ===== */
+function loadData() {
   try {
-    if (!fs.existsSync(SUBSCRIBERS_FILE)) {
-      fs.writeFileSync(SUBSCRIBERS_FILE, "[]");
-      return [];
+    if (!fs.existsSync(DATA_FILE)) {
+      const init = {
+        subscribers: [],
+        meetingCron: "0 13 * * 5", // Friday 9PM GMT+8
+        meetingLabel: "Friday 9 PM (GMT+8)"
+      };
+      fs.writeFileSync(DATA_FILE, JSON.stringify(init, null, 2));
+      return init;
     }
-
-    const data = fs.readFileSync(SUBSCRIBERS_FILE, "utf8").trim();
-
-    if (!data) {
-      fs.writeFileSync(SUBSCRIBERS_FILE, "[]");
-      return [];
-    }
-
-    return JSON.parse(data);
-  } catch (err) {
-    console.error("⚠️ subscribers.json corrupted — resetting");
-    fs.writeFileSync(SUBSCRIBERS_FILE, "[]");
-    return [];
+    return JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+  } catch {
+    console.error("⚠️ Data corrupted, resetting");
+    return { subscribers: [], meetingCron: "0 13 * * 5", meetingLabel: "" };
   }
 }
 
-function saveSubscribers(list) {
-  fs.writeFileSync(SUBSCRIBERS_FILE, JSON.stringify(list, null, 2));
+function saveData(data) {
+  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 }
-/* =============================== */
+
+/* Backward compatible wrappers */
+function loadSubscribers() {
+  return loadData().subscribers;
+}
+function saveSubscribers(list) {
+  const data = loadData();
+  data.subscribers = list;
+  saveData(data);
+}
+/* ========================== */
 
 client.once(Events.ClientReady, () => {
   console.log(`🤖 Logged in as ${client.user.tag}`);
+  scheduleMeeting();
 });
 
-/* ===== REACTION HANDLER ===== */
+/* ===== REACTION SUBSCRIBE ===== */
 client.on(Events.MessageReactionAdd, async (reaction, user) => {
   if (user.bot) return;
-
-  if (reaction.partial) {
-    try {
-      await reaction.fetch();
-    } catch {
-      return;
-    }
-  }
-
+  if (reaction.partial) await reaction.fetch().catch(() => {});
   if (reaction.message.channel.id !== TEXT_CHANNEL_ID) return;
   if (reaction.emoji.name !== EMOJI) return;
 
-  console.log(`🔔 Reaction accepted from ${user.tag}`);
-
   const subscribers = loadSubscribers();
-
-  if (subscribers.includes(user.id)) {
-    console.log(`ℹ️ ${user.tag} already subscribed`);
-    return;
-  }
+  if (subscribers.includes(user.id)) return;
 
   subscribers.push(user.id);
   saveSubscribers(subscribers);
 
   try {
-    await user.send(
-      "✅ You’re subscribed!\n\nYou’ll receive a DM every **Friday at 9 PM (GMT+8)** with the voice chat link."
-    );
-    console.log(`📩 Confirmation DM sent to ${user.tag}`);
-  } catch {
-    console.log(`❌ Cannot DM ${user.tag}`);
-  }
+    await user.send("✅ You’re subscribed to weekly meeting reminders.");
+  } catch {}
 
-  /* Add Weekly Meeting Role */
   try {
     const guild = await client.guilds.fetch(GUILD_ID);
     const member = await guild.members.fetch(user.id);
-  
     await member.roles.add(ROLE_ID);
-    console.log(`🏷️ Weekly Meeting role added to ${user.tag}`);
-  } catch (err) {
-    console.log(`❌ Failed to add role to ${user.tag}`);
-  }
-
+  } catch {}
 });
 
-/* Delete subscriber from the list when remove reaction */
 client.on(Events.MessageReactionRemove, async (reaction, user) => {
   if (user.bot) return;
-
-  if (reaction.partial) {
-    try {
-      await reaction.fetch();
-    } catch {
-      return;
-    }
-  }
-
+  if (reaction.partial) await reaction.fetch().catch(() => {});
   if (reaction.message.channel.id !== TEXT_CHANNEL_ID) return;
   if (reaction.emoji.name !== EMOJI) return;
 
-  const subscribers = loadSubscribers();
-  const index = subscribers.indexOf(user.id);
+  const subs = loadSubscribers().filter(id => id !== user.id);
+  saveSubscribers(subs);
 
-  if (index === -1) {
-    return; // user was not subscribed
-  }
-
-  subscribers.splice(index, 1);
-  saveSubscribers(subscribers);
-
-  console.log(`❌ ${user.tag} unsubscribed`);
-
-  try {
-    await user.send(
-      "❌ You have been **unsubscribed** from the weekly meeting reminders.\n\nReact with 🔔 again anytime to rejoin."
-    );
-  } catch {
-    console.log(`❌ Cannot DM ${user.tag}`);
-  }
-
-  /* Remove Weekly Meeting Role */
   try {
     const guild = await client.guilds.fetch(GUILD_ID);
     const member = await guild.members.fetch(user.id);
-  
     await member.roles.remove(ROLE_ID);
-    console.log(`🏷️ Weekly Meeting role removed from ${user.tag}`);
-  } catch (err) {
-    console.log(`❌ Failed to remove role from ${user.tag}`);
-  }
-
+  } catch {}
 });
 
-/* ============================ */
-
-/* Check Subscribers list */
+/* ===== OWNER DM COMMANDS ===== */
 client.on(Events.MessageCreate, async message => {
   if (message.author.bot) return;
-  if (message.content !== "!subscribers") return;
+  if (message.guild) return; // DM only
+  if (message.author.id !== OWNER_ID) return;
 
-  // 🔐 ADMIN ONLY
-  if (message.author.id !== "340464341193326593") {
-    return;
-  }
+  const data = loadData();
+  const args = message.content.split(" ");
 
-  const list = loadSubscribers();
-
-  try {
-    await message.author.send(
-      `📄 **Subscribers (${list.length})**\n\n` +
-      (list.length ? list.join("\n") : "No subscribers yet.")
+  /* !subscribers */
+  if (message.content === "!subscribers") {
+    return message.author.send(
+      `📄 Subscribers (${data.subscribers.length})\n\n` +
+      (data.subscribers.length ? data.subscribers.join("\n") : "Empty")
     );
-  } catch {
-    console.log("❌ Failed to DM admin");
-  }
-});
-
-
-/* Delete Subscribers list */
-client.on(Events.MessageCreate, async message => {
-  if (message.author.bot) return;
-  if (message.content !== "!clear-subscribers") return;
-
-  // 🔐 OWNER ONLY
-  if (message.author.id !== "340464341193326593") {
-    return;
   }
 
-  try {
-    saveSubscribers([]); // clear the list
-
-    await message.author.send(
-      "🧹 **All subscribers have been cleared successfully.**\n\nThe weekly meeting list is now empty."
-    );
-
-    console.log("🧹 Subscribers list cleared by owner");
-  } catch (err) {
-    console.error("❌ Failed to clear subscribers", err);
-  }
-});
-
-
-
-/* ===== CLEANUP WHEN MEMBER LEAVES / KICKED ===== */
-client.on(Events.GuildMemberRemove, member => {
-  const subscribers = loadSubscribers();
-  const index = subscribers.indexOf(member.id);
-
-  if (index === -1) return; // not subscribed, nothing to clean
-
-  subscribers.splice(index, 1);
-  saveSubscribers(subscribers);
-
-  console.log(`🧹 Removed ${member.user.tag} from subscribers (left/kicked)`);
-});
-/* ============================================= */
-
-
-
-/* ===== CRON JOB ===== */
-/*
-  Friday 9 PM GMT+8
-  = Friday 13:00 UTC
-*/
-cron.schedule("0 13 * * 5", async () => {
-// cron.schedule("* * * * *", async () => {
-  console.log("⏰ Weekly Meeting Reminder Triggered");
-
-  const subscribers = loadSubscribers();
-  if (subscribers.length === 0) {
-    console.log("ℹ️ No subscribers to notify");
-    return;
-  }
-
-  const inviteLink = `https://discord.com/channels/${GUILD_ID}/${VOICE_CHANNEL_ID}`;
-
-  for (const userId of subscribers) {
-    try {
-      const user = await client.users.fetch(userId);
-      await user.send(
-        `🔔 **Weekly Meeting Reminder**\n\nJoin the voice channel here:\n${inviteLink}`
-      );
-      console.log(`📩 DM sent to ${user.tag}`);
-    } catch {
-      console.log(`❌ Failed to DM ${userId}`);
+  /* !addsubsonce */
+  if (args[0] === "!addsubsonce" && args[1]) {
+    if (!data.subscribers.includes(args[1])) {
+      data.subscribers.push(args[1]);
+      saveData(data);
     }
+    return message.author.send(`✅ Added ${args[1]}`);
+  }
+
+  /* !addsubsbulk */
+  if (args[0] === "!addsubsbulk" && args[1]) {
+    const ids = args[1].split(",").map(x => x.trim());
+    ids.forEach(id => {
+      if (!data.subscribers.includes(id)) data.subscribers.push(id);
+    });
+    saveData(data);
+    return message.author.send(`✅ Added ${ids.length} IDs`);
+  }
+
+  /* !timechange */
+  if (args[0] === "!timechange") {
+    data.meetingLabel = args.slice(1).join(" ");
+    saveData(data);
+    scheduleMeeting();
+    return message.author.send(`⏰ Meeting time updated to ${data.meetingLabel}`);
+  }
+
+  /* !clear-subscribers */
+  if (message.content === "!clear-subscribers") {
+    data.subscribers = [];
+    saveData(data);
+    return message.author.send("🧹 Subscriber list cleared");
   }
 });
-/* ===================== */
 
-process.on("SIGTERM", () => {
-  console.log("⚠️ Process terminated (SIGTERM)");
-  process.exit(0);
-});
+/* ===== CRON SCHEDULER ===== */
+let meetingTask;
+function scheduleMeeting() {
+  if (meetingTask) meetingTask.stop();
+
+  const data = loadData();
+  meetingTask = cron.schedule(data.meetingCron, async () => {
+    const invite = `https://discord.com/channels/${GUILD_ID}/${VOICE_CHANNEL_ID}`;
+    for (const id of data.subscribers) {
+      try {
+        const user = await client.users.fetch(id);
+        await user.send(`🔔 Weekly Meeting\n${invite}`);
+      } catch {}
+    }
+  });
+
+  console.log("⏰ Meeting scheduler active");
+}
 
 client.login(TOKEN);
