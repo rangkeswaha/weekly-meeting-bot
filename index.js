@@ -33,6 +33,45 @@ const client = new Client({
   ]
 });
 
+/* ===== Scheduling Function ===== */
+function parseTimeChange(input) {
+  const regex =
+    /^(\d{1,2}):(\d{2})\s+(GMT|UTC)([+-]\d{1,2})\s+(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)$/i;
+
+  const match = input.match(regex);
+  if (!match) return null;
+
+  let [, hour, minute, , offset, day] = match;
+
+  hour = parseInt(hour, 10);
+  minute = parseInt(minute, 10);
+  const tzOffset = parseInt(offset, 10);
+
+  if (hour > 23 || minute > 59) return null;
+
+  // Convert to UTC
+  let utcHour = hour - tzOffset;
+  if (utcHour < 0) utcHour += 24;
+  if (utcHour > 23) utcHour -= 24;
+
+  const dayMap = {
+    Sunday: 0,
+    Monday: 1,
+    Tuesday: 2,
+    Wednesday: 3,
+    Thursday: 4,
+    Friday: 5,
+    Saturday: 6
+  };
+
+  return {
+    cron: `${minute} ${utcHour} * * ${dayMap[day]}`,
+    label: `${day} ${hour.toString().padStart(2, "0")}:${minute
+      .toString()
+      .padStart(2, "0")} (GMT${offset})`
+  };
+}
+
 /* ===== DATA HANDLING ===== */
 function loadData() {
   try {
@@ -150,11 +189,31 @@ client.on(Events.MessageCreate, async message => {
 
   /* !timechange */
   if (args[0] === "!timechange") {
-    data.meetingLabel = args.slice(1).join(" ");
+    const input = args.slice(1).join(" ");
+    const parsed = parseTimeChange(input);
+  
+    if (!parsed) {
+      return message.author.send(
+        "❌ Invalid format.\n\n" +
+        "Use:\n" +
+        "`!timechange HH:MM GMT±X DAY`\n\n" +
+        "Example:\n" +
+        "`!timechange 21:45 GMT+8 Friday`"
+      );
+    }
+  
+    data.meetingCron = parsed.cron;
+    data.meetingLabel = parsed.label;
     saveData(data);
     scheduleMeeting();
-    return message.author.send(`⏰ Meeting time updated to ${data.meetingLabel}`);
+  
+    return message.author.send(
+      "⏰ **Meeting time updated**\n\n" +
+      `🕒 ${parsed.label}\n` +
+      `⚙️ Cron: \`${parsed.cron}\``
+    );
   }
+
 
   /* !clear-subscribers */
   if (message.content === "!clear-subscribers") {
