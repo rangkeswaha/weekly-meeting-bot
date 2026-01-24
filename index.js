@@ -267,7 +267,7 @@ function scheduleMeeting() {
     for (const id of data.subscribers) {
       try {
         const user = await client.users.fetch(id);
-        await user.send(`🔔 Weekly Meeting\n${invite}`);
+        await user.send(`🔔 **Weekly Meeting Reminder**\n\nJoin the voice channel here:\n${invite}`);
       } catch {}
     }
   });
