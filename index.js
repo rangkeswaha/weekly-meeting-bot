@@ -22,6 +22,7 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessageReactions,
     GatewayIntentBits.DirectMessages,
   ],
@@ -150,6 +151,38 @@ client.on(Events.MessageReactionRemove, async (reaction, user) => {
     await member.roles.remove(ROLE_ID);
   } catch {}
 });
+
+/* ===== CLEANUP WHEN MEMBER LEAVES / KICKED ===== */
+client.on(Events.GuildMemberRemove, member => {
+  const subscribers = loadSubscribers();
+  const index = subscribers.indexOf(member.id);
+
+  if (index === -1) return;
+
+  subscribers.splice(index, 1);
+  saveSubscribers(subscribers);
+
+  console.log(
+    `🧹 Removed ${member.user?.tag || member.id} from subscribers (left/kicked)`
+  );
+});
+/* ============================================= */
+
+/* ===== CLEANUP WHEN MEMBER IS BANNED ===== */
+client.on(Events.GuildBanAdd, async ban => {
+  const userId = ban.user.id;
+  const subscribers = loadSubscribers();
+  const index = subscribers.indexOf(userId);
+
+  if (index === -1) return;
+
+  subscribers.splice(index, 1);
+  saveSubscribers(subscribers);
+
+  console.log(`🚫 Removed ${ban.user.tag} from subscribers (banned)`);
+});
+/* ======================================== */
+
 
 /* ===== OWNER DM COMMANDS ===== */
 client.on(Events.MessageCreate, async message => {
