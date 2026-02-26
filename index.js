@@ -8,7 +8,7 @@ const {
 } = require("discord.js");
 
 /* ========= CONFIG ========= */
-const TOKEN = "MTQ2Mjc0NDYwMjY1NzI5NjQzNw.GJRQzy.qLrY1Egvdx0R_GjqG1_Spwa2b2Kg6mp2Rdsv7g";
+const TOKEN = process.env.DISCORD_TOKEN;
 const GUILD_ID = "1354518292009717841";
 const TEXT_CHANNEL_ID = "1462735108598399103";
 const VOICE_CHANNEL_ID = "1462727284187201680";
